@@ -11,7 +11,7 @@ Dinkes (the district health office) wants **monthly unique patients and total vi
 1. Write the **SQL** (or script) that produces the numbers.
 2. Include the **result table** in your submission.
 3. Write `ASSUMPTIONS.md`: every data problem you found, how you handled it, and what you would confirm with Dinkes before this goes on a dashboard.
-4. You may email **one clarifying question** during the 3-day window to `[EMAIL_ADDRESS]`.
+4. You may send **one clarifying question** during the 3-day window by replying to the assessment invitation email.
 
 ## What We're Looking For
 
