@@ -66,12 +66,6 @@ For clarifying questions (max one per task), reply to the invitation email.
 
 ---
 
-## After Submission
-
-We will schedule a **45-minute follow-up call** to walk through your work. This call counts for **30% of the overall score**. We will ask you to explain your decisions, modify code live, and discuss the task you did not choose.
-
----
-
 ## Getting Started
 
 Each task folder has its own `README.md` with detailed instructions and a `SETUP.md` with setup steps.
