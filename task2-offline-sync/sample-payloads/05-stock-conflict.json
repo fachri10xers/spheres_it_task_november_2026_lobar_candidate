@@ -1,0 +1,55 @@
+{
+  "device_id": "device-C-003",
+  "batch_id": "batch-stock-001",
+  "records": [
+    {
+      "type": "patient_registration",
+      "client_uuid": "pat-c001-uuid",
+      "device_recorded_at": "2026-10-15T11:00:00",
+      "schema_version": 1,
+      "data": {
+        "nik": "5201140505950006",
+        "name": "Rina Marlina",
+        "birth_date": "1995-05-05",
+        "gender": "F",
+        "address": "Jl. Anggrek No. 7",
+        "clinic_id": "PKM-001"
+      }
+    },
+    {
+      "type": "visit",
+      "client_uuid": "vis-c001-uuid",
+      "device_recorded_at": "2026-10-15T11:05:00",
+      "schema_version": 1,
+      "data": {
+        "patient_client_uuid": "pat-c001-uuid",
+        "clinic_id": "PKM-001",
+        "polyclinic": "umum",
+        "visit_date": "2026-10-15T11:00:00",
+        "diagnosis": "Diare"
+      }
+    },
+    {
+      "type": "dispensing",
+      "client_uuid": "disp-c001-uuid",
+      "device_recorded_at": "2026-10-15T11:10:00",
+      "schema_version": 1,
+      "data": {
+        "visit_client_uuid": "vis-c001-uuid",
+        "medicine_id": "MED-003",
+        "quantity": 15
+      }
+    },
+    {
+      "type": "dispensing",
+      "client_uuid": "disp-c002-uuid",
+      "device_recorded_at": "2026-10-15T11:15:00",
+      "schema_version": 1,
+      "data": {
+        "visit_client_uuid": "vis-c001-uuid",
+        "medicine_id": "MED-003",
+        "quantity": 10
+      }
+    }
+  ]
+}

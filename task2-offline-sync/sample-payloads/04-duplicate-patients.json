@@ -1,0 +1,61 @@
+{
+  "device_id": "device-B-002",
+  "batch_id": "batch-duppatient-001",
+  "records": [
+    {
+      "type": "patient_registration",
+      "client_uuid": "pat-b001-uuid",
+      "device_recorded_at": "2026-10-15T10:00:00",
+      "schema_version": 1,
+      "data": {
+        "nik": "0000000000000000",
+        "name": "St. Aminah",
+        "birth_date": "1990-06-15",
+        "gender": "F",
+        "address": "Dusun Lembah Sari",
+        "clinic_id": "PKM-001"
+      }
+    },
+    {
+      "type": "patient_registration",
+      "client_uuid": "pat-b002-uuid",
+      "device_recorded_at": "2026-10-15T10:05:00",
+      "schema_version": 1,
+      "data": {
+        "nik": "5201146106900005",
+        "name": "SITI AMINAH",
+        "birth_date": "1990-06-15",
+        "gender": "F",
+        "address": "Dusun Lembah Sari RT 03",
+        "clinic_id": "PKM-002"
+      }
+    },
+    {
+      "type": "patient_registration",
+      "client_uuid": "pat-b003-uuid",
+      "device_recorded_at": "2026-10-15T10:10:00",
+      "schema_version": 1,
+      "data": {
+        "nik": "0000000000000000",
+        "name": "Rahmat Hidayat",
+        "birth_date": "1975-11-03",
+        "gender": "M",
+        "address": "Jl. Mawar No. 12",
+        "clinic_id": "PKM-001"
+      }
+    },
+    {
+      "type": "visit",
+      "client_uuid": "vis-b001-uuid",
+      "device_recorded_at": "2026-10-15T10:15:00",
+      "schema_version": 1,
+      "data": {
+        "patient_client_uuid": "pat-b001-uuid",
+        "clinic_id": "PKM-001",
+        "polyclinic": "umum",
+        "visit_date": "2026-10-15T10:00:00",
+        "diagnosis": "Demam"
+      }
+    }
+  ]
+}

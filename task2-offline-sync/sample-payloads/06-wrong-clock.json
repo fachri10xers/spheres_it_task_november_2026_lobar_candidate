@@ -1,0 +1,44 @@
+{
+  "device_id": "device-D-004",
+  "batch_id": "batch-clock-001",
+  "records": [
+    {
+      "type": "patient_registration",
+      "client_uuid": "pat-d001-uuid",
+      "device_recorded_at": "2019-03-22T14:00:00",
+      "schema_version": 1,
+      "data": {
+        "nik": "3303141208880007",
+        "name": "Eko Prasetyo",
+        "birth_date": "1988-08-12",
+        "gender": "M",
+        "address": "Desa Kalimanah RT 05/RW 02",
+        "clinic_id": "PKM-003"
+      }
+    },
+    {
+      "type": "visit",
+      "client_uuid": "vis-d001-uuid",
+      "device_recorded_at": "2019-03-22T14:10:00",
+      "schema_version": 1,
+      "data": {
+        "patient_client_uuid": "pat-d001-uuid",
+        "clinic_id": "PKM-003",
+        "polyclinic": "umum",
+        "visit_date": "2019-03-22T14:05:00",
+        "diagnosis": "Gastritis"
+      }
+    },
+    {
+      "type": "dispensing",
+      "client_uuid": "disp-d001-uuid",
+      "device_recorded_at": "2019-03-22T14:15:00",
+      "schema_version": 1,
+      "data": {
+        "visit_client_uuid": "vis-d001-uuid",
+        "medicine_id": "MED-001",
+        "quantity": 20
+      }
+    }
+  ]
+}

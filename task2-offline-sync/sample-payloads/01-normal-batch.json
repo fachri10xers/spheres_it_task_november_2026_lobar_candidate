@@ -1,0 +1,83 @@
+{
+  "device_id": "device-A-001",
+  "batch_id": "batch-normal-001",
+  "records": [
+    {
+      "type": "patient_registration",
+      "client_uuid": "pat-a001-uuid",
+      "device_recorded_at": "2026-10-15T08:00:00",
+      "schema_version": 1,
+      "data": {
+        "nik": "5201141506900001",
+        "name": "Ahmad Fauzi",
+        "birth_date": "1990-06-15",
+        "gender": "M",
+        "address": "Jl. Raya Sandik No. 42, Lombok Barat",
+        "clinic_id": "PKM-001"
+      }
+    },
+    {
+      "type": "patient_registration",
+      "client_uuid": "pat-a002-uuid",
+      "device_recorded_at": "2026-10-15T08:05:00",
+      "schema_version": 1,
+      "data": {
+        "nik": "5201142003850002",
+        "name": "Dewi Lestari",
+        "birth_date": "1985-03-20",
+        "gender": "F",
+        "address": "Dusun Batu Layar, Senteluk",
+        "clinic_id": "PKM-001"
+      }
+    },
+    {
+      "type": "visit",
+      "client_uuid": "vis-a001-uuid",
+      "device_recorded_at": "2026-10-15T08:15:00",
+      "schema_version": 1,
+      "data": {
+        "patient_client_uuid": "pat-a001-uuid",
+        "clinic_id": "PKM-001",
+        "polyclinic": "umum",
+        "visit_date": "2026-10-15T08:10:00",
+        "diagnosis": "ISPA",
+        "notes": "Batuk 3 hari"
+      }
+    },
+    {
+      "type": "visit",
+      "client_uuid": "vis-a002-uuid",
+      "device_recorded_at": "2026-10-15T08:20:00",
+      "schema_version": 1,
+      "data": {
+        "patient_client_uuid": "pat-a002-uuid",
+        "clinic_id": "PKM-001",
+        "polyclinic": "kia",
+        "visit_date": "2026-10-15T08:15:00",
+        "diagnosis": "ANC rutin"
+      }
+    },
+    {
+      "type": "dispensing",
+      "client_uuid": "disp-a001-uuid",
+      "device_recorded_at": "2026-10-15T08:25:00",
+      "schema_version": 1,
+      "data": {
+        "visit_client_uuid": "vis-a001-uuid",
+        "medicine_id": "MED-001",
+        "quantity": 10
+      }
+    },
+    {
+      "type": "dispensing",
+      "client_uuid": "disp-a002-uuid",
+      "device_recorded_at": "2026-10-15T08:30:00",
+      "schema_version": 1,
+      "data": {
+        "visit_client_uuid": "vis-a001-uuid",
+        "medicine_id": "MED-002",
+        "quantity": 15
+      }
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+services:
+  clinic-sync:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - TZ=UTC
+      - CLAIM_API_URL=http://mock-claim-api:8001
+      - DATABASE_PATH=data/clinic.db
+      - LOG_LEVEL=INFO
+    volumes:
+      - .:/app
+      - clinic-data:/app/data
+    depends_on:
+      - mock-claim-api
+
+  mock-claim-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - TZ=UTC
+      - MOCK_TOKEN_EXPIRY=3600
+      - MOCK_TIMEOUT_RATE=0.05
+      - MOCK_RATE_LIMIT_WINDOW=1.0
+      - MOCK_RATE_LIMIT_MAX=10
+      # Uncomment to test with short token expiry:
+      # - MOCK_TOKEN_EXPIRY=5
+    command: ["uvicorn", "mock_claim_api:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
+
+volumes:
+  clinic-data:

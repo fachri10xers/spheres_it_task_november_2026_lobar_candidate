@@ -1,0 +1,33 @@
+{
+  "device_id": "device-E-005",
+  "batch_id": "batch-schema-001",
+  "records": [
+    {
+      "type": "patient_registration",
+      "client_uuid": "pat-e001-uuid",
+      "device_recorded_at": "2026-10-15T13:00:00",
+      "schema_version": 0,
+      "data": {
+        "nik": "3303142505920008",
+        "name": "Fitri Handayani",
+        "birth_date": "1992-05-25",
+        "gender": "F",
+        "address": "Jl. Kenanga No. 15",
+        "clinic_id": "PKM-003"
+      }
+    },
+    {
+      "type": "visit",
+      "client_uuid": "vis-e001-uuid",
+      "device_recorded_at": "2026-10-15T13:05:00",
+      "schema_version": 99,
+      "data": {
+        "patient_client_uuid": "pat-e001-uuid",
+        "clinic_id": "PKM-003",
+        "polyclinic": "gigi",
+        "visit_date": "2026-10-15T13:00:00",
+        "diagnosis": "Karies gigi"
+      }
+    }
+  ]
+}
