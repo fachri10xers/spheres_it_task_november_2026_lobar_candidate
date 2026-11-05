@@ -91,7 +91,7 @@ The mock claim API has configurable settings via environment variables. Edit `.e
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `MOCK_TOKEN_EXPIRY` | `3600` | Token validity in seconds |
-| `MOCK_TIMEOUT_RATE` | `0.05` | Probability of simulated timeout (0.0–1.0) |
+| `MOCK_TIMEOUT_RATE` | `0.05` | Probability of simulated timeout (0.0-1.0) |
 | `MOCK_RATE_LIMIT_WINDOW` | `1.0` | Rate limit window in seconds |
 | `MOCK_RATE_LIMIT_MAX` | `10` | Max requests per window |
 

@@ -70,4 +70,4 @@ curl -X POST http://localhost:8000/reset \
   }'
 ```
 
-Note: MED-003 has only 20 units — this is intentional for the stock conflict scenario.
+Note: MED-003 has only 20 units - this is intentional for the stock conflict scenario.

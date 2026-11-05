@@ -34,5 +34,5 @@ sqlite3 clinic_data.sqlite "SELECT name, (SELECT COUNT(*) FROM clinics) FROM sql
 ## Notes
 
 - Work on a copy of the file and keep the original untouched.
-- You may use SQL, Python/pandas, R, or any tool — as long as the final numbers are reproducible from what you submit.
-- If using Python, `sqlite3` is built in — no extra packages needed.
+- You may use SQL, Python/pandas, R, or any tool - as long as the final numbers are reproducible from what you submit.
+- If using Python, `sqlite3` is built in - no extra packages needed.

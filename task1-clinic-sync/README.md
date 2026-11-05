@@ -12,7 +12,7 @@ The service is scheduled to go live at **40 clinics next week**.
 
 ## Your Task
 
-1. **Review the code.** Write `REVIEW.md`: list the issues you find, ranked by severity. For the **top 5**, explain the real-world impact — what goes wrong, and who notices (patient, clinic staff, finance team, Dinkes).
+1. **Review the code.** Write `REVIEW.md`: list the issues you find, ranked by severity. For the **top 5**, explain the real-world impact - what goes wrong, and who notices (patient, clinic staff, finance team, Dinkes).
 
 2. **Fix the top 3 issues** in code. Each fix must include a test that **fails before the fix and passes after**.
 
@@ -38,6 +38,6 @@ data/               SQLite database (created on startup)
 
 ## Notes
 
-- The mock claim API is a separate service that simulates the real insurance claim API. It has configurable behavior (timeouts, rate limits, token expiry) — see `.env.example`.
+- The mock claim API is a separate service that simulates the real insurance claim API. It has configurable behavior (timeouts, rate limits, token expiry) - see `.env.example`.
 - All existing tests pass. Your fixes should not break them.
 - The service handles data from 3 Puskesmas across 2 timezones (WITA and WIB).

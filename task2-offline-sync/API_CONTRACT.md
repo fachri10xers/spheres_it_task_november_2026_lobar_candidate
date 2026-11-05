@@ -237,5 +237,5 @@ Reset the server to a known state for testing. This seeds stock and clinics.
 | `POST /sync` | 200 (always, with per-record results) | 400 (malformed top-level structure) |
 | `GET /patients/{id}` | 200 | 404 |
 | `GET /stock/{id}` | 200 | 404 |
-| `GET /review-queue` | 200 | — |
-| `POST /reset` | 200 | — |
+| `GET /review-queue` | 200 | - |
+| `POST /reset` | 200 | - |

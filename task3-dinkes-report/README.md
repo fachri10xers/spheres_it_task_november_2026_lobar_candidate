@@ -4,7 +4,7 @@
 
 ## Scenario
 
-Dinkes (the district health office) wants **monthly unique patients and total visits per Puskesmas** for their dashboard. The data covers 6 months (January–June 2026) across the Puskesmas in the system.
+Dinkes (the district health office) wants **monthly unique patients and total visits per Puskesmas** for their dashboard. The data covers 6 months (January-June 2026) across the Puskesmas in the system.
 
 ## Your Task
 
@@ -24,11 +24,11 @@ Dinkes (the district health office) wants **monthly unique patients and total vi
 
 The file `clinic_data.sqlite` contains:
 
-- `clinics` — facility information
-- `patients` — patient records
-- `registrations` — visit registrations with status
-- `visits` — outpatient visit records
-- `dispensing` — pharmacy dispensing records
+- `clinics` - facility information
+- `patients` - patient records
+- `registrations` - visit registrations with status
+- `visits` - outpatient visit records
+- `dispensing` - pharmacy dispensing records
 
 See `SCHEMA.md` for column descriptions.
 
