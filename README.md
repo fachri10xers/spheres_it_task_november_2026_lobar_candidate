@@ -20,6 +20,8 @@ SPHERES builds digital tools for primary health care in Lombok Barat and Purbali
 
 Doing all three earns no extra credit. Pick two and do them well.
 
+For the task you **did not** choose, write a brief `SKIPPED_TASK.md`: how would you approach it? What are the key challenges? No code needed - just your thinking in half a page or less.
+
 ---
 
 ## Time Window
@@ -55,6 +57,7 @@ your-submission/
   task1/                # Required
   task2/ or task3/      # Your chosen optional task
   CHOICE.md             # One line: which optional task you picked and why
+  SKIPPED_TASK.md       # Brief approach analysis for the task you did not choose
   AI_USAGE.md           # AI tool usage disclosure
 ```
 
