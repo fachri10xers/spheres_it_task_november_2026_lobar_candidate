@@ -58,9 +58,9 @@ your-submission/
   AI_USAGE.md           # AI tool usage disclosure
 ```
 
-Reply to the assessment invitation email with a link to your repository or attach your zip file. Use subject line `SPHERES IT Assessment - [Your Name]`.
+**Reply All** to the assessment invitation email with a link to your repository or attach your zip file. Use subject line `SPHERES IT Assessment - [Your Name]`.
 
-For clarifying questions (max one per task), reply to the invitation email.
+For clarifying questions (max one per task), **Reply All** to the invitation email so the full team can assist.
 
 ---
 
