@@ -6,7 +6,7 @@ Health workers at small Puskesmas and Posyandu use a Flutter app on low-end Andr
 
 ## Your Task
 
-### Part 1: Design Document (~3 hours)
+### Part 1: Design Document
 
 Write `DESIGN.md` (max 3 pages) covering:
 
@@ -18,7 +18,7 @@ Write `DESIGN.md` (max 3 pages) covering:
 6. **Schema migration.** An app update changes the local schema while phones still hold unsynced records.
 7. **MVP scope.** What would you **not** build for a 2-month MVP?
 
-### Part 2: Server-Side Sync Endpoint (~3 hours)
+### Part 2: Server-Side Sync Endpoint
 
 Implement the server-side sync endpoint in **any backend language**, following [API_CONTRACT.md](API_CONTRACT.md).
 
