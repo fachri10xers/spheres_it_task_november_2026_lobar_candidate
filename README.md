@@ -81,6 +81,3 @@ Each task folder has its own `README.md` with detailed instructions and a `SETUP
 - **Task 3** needs only the SQLite file and any query tool. See `task3-dinkes-report/SETUP.md`.
 - **Task 2** is a design + implementation task — you build the endpoint. See `task2-offline-sync/README.md`.
 
-### If Something Is Broken
-
-If setup takes you more than 15 minutes, email us. That's our problem, not yours, and it won't count against you.
