@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 import uuid
@@ -7,7 +8,7 @@ from datetime import datetime
 import httpx
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 
-from config import CLAIM_API_URL
+from config import CLAIM_API_URL, SYNC_INTERVAL_SECONDS
 from database import init_db, get_db
 from models import BatchPayload, BatchResponse, HealthResponse
 
@@ -198,13 +199,32 @@ def sync_pending_claims():
         conn.commit()
 
 
+# ── Background sync job ─────────────────────────────────────────────────
+
+async def run_periodic_sync():
+    while True:
+        try:
+            await asyncio.to_thread(sync_pending_claims)
+        except Exception as e:
+            logger.warning("Background sync failed: %s", e)
+        await asyncio.sleep(SYNC_INTERVAL_SECONDS)
+
+
 # ── FastAPI app ──────────────────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
     logger.info("Database initialized")
-    yield
+    sync_task = asyncio.create_task(run_periodic_sync())
+    try:
+        yield
+    finally:
+        sync_task.cancel()
+        try:
+            await sync_task
+        except asyncio.CancelledError:
+            logger.info("Background sync stopped")
 
 
 app = FastAPI(title="Clinic Sync Service", version="1.0.0", lifespan=lifespan)

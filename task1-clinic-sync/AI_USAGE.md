@@ -14,6 +14,7 @@ Be specific: which task, in which part of the project.
 - [x] Created `AGENTS.md` (2026-11-10): investigated README/SETUP.md/REVIEW.md, Makefile, `config.py`, `database.py`, mock API, and test suite; verified each claim by running `.venv\Scripts\python.exe -m pytest tests/ -v` and `make test` (11 passed)
 - [x] Added the "AI Usage Log" policy to `AGENTS.md` and created this `AI_USAGE.md` from the provided template (2026-11-10)
 - [x] Fixed REVIEW.md issue #1 (2026-11-10): sync loop in `app.py:sync_pending_claims` no longer marks failed submissions as synced; saves `external_claim_id` on success; added `tests/test_sync.py` (3 tests) that fail on the buggy baseline and pass after the fix (14/15 tests passing, 11 existing stay green)
+- [x] Fixed REVIEW.md issue #2 (2026-11-10): added `run_periodic_sync` background job wired into the app lifespan using `SYNC_INTERVAL_SECONDS` (claims auto-submit at startup and on each interval); added 2 tests (`test_background_sync_submits_pending_claims_automatically`, `test_startup_syncs_pending_backlog`) that fail on the baseline without the job; reset `app._token` in the mock shim helper to fix cross-test token cache pollution (16 tests passing)
 
 ## 3. Changed / Rejected from AI Output
 
