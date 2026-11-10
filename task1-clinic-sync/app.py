@@ -178,14 +178,23 @@ def sync_pending_claims():
         for row in rows:
             try:
                 result = submit_claim_to_api(row["id"], row["claim_amount"], row["patient_id"])
-                logger.info("Claim %s submitted, result: %s", row["id"], result)
             except Exception as e:
                 logger.warning("Error syncing claim %s: %s", row["id"], e)
+                continue
+
+            external_claim_id = result.get("claim_id") if result else None
+            if external_claim_id is None:
+                logger.warning(
+                    "Claim %s was not accepted by the claim API; leaving as pending for retry",
+                    row["id"],
+                )
+                continue
 
             conn.execute(
-                "UPDATE claims SET synced = 1, status = 'synced', submitted_at = ? WHERE id = ?",
-                (datetime.now().isoformat(), row["id"]),
+                "UPDATE claims SET synced = 1, status = 'synced', external_claim_id = ?, submitted_at = ? WHERE id = ?",
+                (external_claim_id, datetime.now().isoformat(), row["id"]),
             )
+            logger.info("Claim %s synced with external id %s", row["id"], external_claim_id)
         conn.commit()
 
 
