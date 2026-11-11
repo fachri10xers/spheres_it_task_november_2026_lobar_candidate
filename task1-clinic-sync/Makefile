@@ -1,12 +1,18 @@
 .PHONY: setup run run-mock run-app test reset-db clean
 
 VENV := .venv
-PYTHON := $(VENV)/bin/python
-PIP := $(VENV)/bin/pip
+
+ifeq ($(OS),Windows_NT)
+    VENV_BIN := $(VENV)/Scripts
+else
+    VENV_BIN := $(VENV)/bin
+endif
+
+PYTHON := $(VENV_BIN)/python
 
 setup:
 	python3 -m venv $(VENV)
-	$(PIP) install -r requirements.txt
+	$(PYTHON) -m pip install -r requirements.txt
 	mkdir -p data
 
 run-mock:
