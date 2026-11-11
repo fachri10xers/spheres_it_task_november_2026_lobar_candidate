@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import threading
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -19,19 +20,37 @@ logging.basicConfig(
 logger = logging.getLogger("clinic_sync")
 
 _token: str | None = None
+_token_expiry: float = 0.0
+_token_lock = threading.Lock()
 
 
 # ── Token management ────────────────────────────────────────────────────
 
+def _fetch_token() -> None:
+    global _token, _token_expiry
+    resp = httpx.post(f"{CLAIM_API_URL}/token", json={"client_id": "clinic-sync"})
+    resp.raise_for_status()
+    data = resp.json()
+    expires_in = data.get("expires_in", 3600)
+    _token = data["access_token"]
+    _token_expiry = time.time() + max(float(expires_in) - 5.0, 0.0)
+    logger.info("Obtained claim API token")
+
+
+def invalidate_token() -> None:
+    global _token, _token_expiry
+    with _token_lock:
+        _token = None
+        _token_expiry = 0.0
+        logger.warning("Token invalidated; a new token will be fetched on next use")
+
+
 def get_token() -> str:
-    global _token
-    if _token is None:
-        resp = httpx.post(f"{CLAIM_API_URL}/token", json={"client_id": "clinic-sync"})
-        resp.raise_for_status()
-        data = resp.json()
-        _token = data["access_token"]
-        logger.info("Obtained claim API token")
-    return _token
+    global _token, _token_expiry
+    with _token_lock:
+        if _token is None or time.time() >= _token_expiry:
+            _fetch_token()
+        return _token
 
 
 # ── Patient matching ────────────────────────────────────────────────────
@@ -139,9 +158,8 @@ def create_bill_and_claim(conn, bill, patient_id: str):
 # ── Claim submission ────────────────────────────────────────────────────
 
 def submit_claim_to_api(claim_id: str, claim_amount: float, patient_id: str) -> dict | None:
-    token = get_token()
-
     for attempt in range(3):
+        token = get_token()
         try:
             resp = httpx.post(
                 f"{CLAIM_API_URL}/claims",
@@ -153,6 +171,10 @@ def submit_claim_to_api(claim_id: str, claim_amount: float, patient_id: str) -> 
                 },
                 timeout=10.0,
             )
+            if resp.status_code == 401:
+                invalidate_token()
+                continue
+
             resp.raise_for_status()
             return resp.json()
 
