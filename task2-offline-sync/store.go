@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS patients (
 	gender       TEXT NOT NULL,
 	address      TEXT NOT NULL DEFAULT '',
 	clinic_id    TEXT NOT NULL,
+	device_recorded_at TEXT NOT NULL DEFAULT '',
 	received_at  TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS visits (
@@ -53,6 +54,7 @@ CREATE TABLE IF NOT EXISTS visits (
 	visit_date        TEXT NOT NULL,
 	diagnosis         TEXT NOT NULL DEFAULT '',
 	notes             TEXT NOT NULL DEFAULT '',
+	device_recorded_at TEXT NOT NULL DEFAULT '',
 	received_at       TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS dispensings (
@@ -61,6 +63,7 @@ CREATE TABLE IF NOT EXISTS dispensings (
 	visit_server_id TEXT NOT NULL,
 	medicine_id     TEXT NOT NULL,
 	quantity        INTEGER NOT NULL,
+	device_recorded_at TEXT NOT NULL DEFAULT '',
 	received_at     TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS batch_responses (
@@ -99,36 +102,39 @@ type MedicineSeed struct {
 }
 
 type Patient struct {
-	ServerID   string
-	ClientUUID string
-	NIK        string
-	Name       string
-	BirthDate  string
-	Gender     string
-	Address    string
-	ClinicID   string
-	ReceivedAt string
+	ServerID         string
+	ClientUUID       string
+	NIK              string
+	Name             string
+	BirthDate        string
+	Gender           string
+	Address          string
+	ClinicID         string
+	DeviceRecordedAt string
+	ReceivedAt       string
 }
 
 type Visit struct {
-	ServerID        string
-	ClientUUID      string
-	PatientServerID string
-	ClinicID        string
-	Polyclinic      string
-	VisitDate       string
-	Diagnosis       string
-	Notes           string
-	ReceivedAt      string
+	ServerID         string
+	ClientUUID       string
+	PatientServerID  string
+	ClinicID         string
+	Polyclinic       string
+	VisitDate        string
+	Diagnosis        string
+	Notes            string
+	DeviceRecordedAt string
+	ReceivedAt       string
 }
 
 type Dispensing struct {
-	ServerID      string
-	ClientUUID    string
-	VisitServerID string
-	MedicineID    string
-	Quantity      int64
-	ReceivedAt    string
+	ServerID         string
+	ClientUUID       string
+	VisitServerID    string
+	MedicineID       string
+	Quantity         int64
+	DeviceRecordedAt string
+	ReceivedAt       string
 }
 
 type ReviewItem struct {
@@ -370,9 +376,9 @@ func insertRecordTx(tx *sql.Tx, e recordEntry) error {
 
 func insertPatientTx(tx *sql.Tx, p Patient) error {
 	if _, err := tx.Exec(
-		`INSERT INTO patients (server_id, client_uuid, nik, name, birth_date, gender, address, clinic_id, received_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.ServerID, p.ClientUUID, p.NIK, p.Name, p.BirthDate, p.Gender, p.Address, p.ClinicID, p.ReceivedAt,
+		`INSERT INTO patients (server_id, client_uuid, nik, name, birth_date, gender, address, clinic_id, device_recorded_at, received_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.ServerID, p.ClientUUID, p.NIK, p.Name, p.BirthDate, p.Gender, p.Address, p.ClinicID, p.DeviceRecordedAt, p.ReceivedAt,
 	); err != nil {
 		return fmt.Errorf("insert patient: %w", err)
 	}
@@ -381,9 +387,9 @@ func insertPatientTx(tx *sql.Tx, p Patient) error {
 
 func insertVisitTx(tx *sql.Tx, v Visit) error {
 	if _, err := tx.Exec(
-		`INSERT INTO visits (server_id, client_uuid, patient_server_id, clinic_id, polyclinic, visit_date, diagnosis, notes, received_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		v.ServerID, v.ClientUUID, v.PatientServerID, v.ClinicID, v.Polyclinic, v.VisitDate, v.Diagnosis, v.Notes, v.ReceivedAt,
+		`INSERT INTO visits (server_id, client_uuid, patient_server_id, clinic_id, polyclinic, visit_date, diagnosis, notes, device_recorded_at, received_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		v.ServerID, v.ClientUUID, v.PatientServerID, v.ClinicID, v.Polyclinic, v.VisitDate, v.Diagnosis, v.Notes, v.DeviceRecordedAt, v.ReceivedAt,
 	); err != nil {
 		return fmt.Errorf("insert visit: %w", err)
 	}
@@ -392,9 +398,9 @@ func insertVisitTx(tx *sql.Tx, v Visit) error {
 
 func insertDispensingTx(tx *sql.Tx, d Dispensing) error {
 	if _, err := tx.Exec(
-		`INSERT INTO dispensings (server_id, client_uuid, visit_server_id, medicine_id, quantity, received_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		d.ServerID, d.ClientUUID, d.VisitServerID, d.MedicineID, d.Quantity, d.ReceivedAt,
+		`INSERT INTO dispensings (server_id, client_uuid, visit_server_id, medicine_id, quantity, device_recorded_at, received_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		d.ServerID, d.ClientUUID, d.VisitServerID, d.MedicineID, d.Quantity, d.DeviceRecordedAt, d.ReceivedAt,
 	); err != nil {
 		return fmt.Errorf("insert dispensing: %w", err)
 	}
