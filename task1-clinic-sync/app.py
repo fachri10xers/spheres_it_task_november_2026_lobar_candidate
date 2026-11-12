@@ -1,4 +1,6 @@
+import asyncio
 import logging
+import threading
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -7,7 +9,7 @@ from datetime import datetime
 import httpx
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 
-from config import CLAIM_API_URL
+from config import CLAIM_API_URL, SYNC_INTERVAL_SECONDS
 from database import init_db, get_db
 from models import BatchPayload, BatchResponse, HealthResponse
 
@@ -18,19 +20,37 @@ logging.basicConfig(
 logger = logging.getLogger("clinic_sync")
 
 _token: str | None = None
+_token_expiry: float = 0.0
+_token_lock = threading.Lock()
 
 
 # ── Token management ────────────────────────────────────────────────────
 
+def _fetch_token() -> None:
+    global _token, _token_expiry
+    resp = httpx.post(f"{CLAIM_API_URL}/token", json={"client_id": "clinic-sync"})
+    resp.raise_for_status()
+    data = resp.json()
+    expires_in = data.get("expires_in", 3600)
+    _token = data["access_token"]
+    _token_expiry = time.time() + max(float(expires_in) - 5.0, 0.0)
+    logger.info("Obtained claim API token")
+
+
+def invalidate_token() -> None:
+    global _token, _token_expiry
+    with _token_lock:
+        _token = None
+        _token_expiry = 0.0
+        logger.warning("Token invalidated; a new token will be fetched on next use")
+
+
 def get_token() -> str:
-    global _token
-    if _token is None:
-        resp = httpx.post(f"{CLAIM_API_URL}/token", json={"client_id": "clinic-sync"})
-        resp.raise_for_status()
-        data = resp.json()
-        _token = data["access_token"]
-        logger.info("Obtained claim API token")
-    return _token
+    global _token, _token_expiry
+    with _token_lock:
+        if _token is None or time.time() >= _token_expiry:
+            _fetch_token()
+        return _token
 
 
 # ── Patient matching ────────────────────────────────────────────────────
@@ -138,9 +158,8 @@ def create_bill_and_claim(conn, bill, patient_id: str):
 # ── Claim submission ────────────────────────────────────────────────────
 
 def submit_claim_to_api(claim_id: str, claim_amount: float, patient_id: str) -> dict | None:
-    token = get_token()
-
     for attempt in range(3):
+        token = get_token()
         try:
             resp = httpx.post(
                 f"{CLAIM_API_URL}/claims",
@@ -152,6 +171,10 @@ def submit_claim_to_api(claim_id: str, claim_amount: float, patient_id: str) -> 
                 },
                 timeout=10.0,
             )
+            if resp.status_code == 401:
+                invalidate_token()
+                continue
+
             resp.raise_for_status()
             return resp.json()
 
@@ -178,15 +201,35 @@ def sync_pending_claims():
         for row in rows:
             try:
                 result = submit_claim_to_api(row["id"], row["claim_amount"], row["patient_id"])
-                logger.info("Claim %s submitted, result: %s", row["id"], result)
             except Exception as e:
                 logger.warning("Error syncing claim %s: %s", row["id"], e)
+                continue
+
+            external_claim_id = result.get("claim_id") if result else None
+            if external_claim_id is None:
+                logger.warning(
+                    "Claim %s was not accepted by the claim API; leaving as pending for retry",
+                    row["id"],
+                )
+                continue
 
             conn.execute(
-                "UPDATE claims SET synced = 1, status = 'synced', submitted_at = ? WHERE id = ?",
-                (datetime.now().isoformat(), row["id"]),
+                "UPDATE claims SET synced = 1, status = 'synced', external_claim_id = ?, submitted_at = ? WHERE id = ?",
+                (external_claim_id, datetime.now().isoformat(), row["id"]),
             )
+            logger.info("Claim %s synced with external id %s", row["id"], external_claim_id)
         conn.commit()
+
+
+# ── Background sync job ─────────────────────────────────────────────────
+
+async def run_periodic_sync():
+    while True:
+        try:
+            await asyncio.to_thread(sync_pending_claims)
+        except Exception as e:
+            logger.warning("Background sync failed: %s", e)
+        await asyncio.sleep(SYNC_INTERVAL_SECONDS)
 
 
 # ── FastAPI app ──────────────────────────────────────────────────────────
@@ -195,7 +238,15 @@ def sync_pending_claims():
 async def lifespan(app: FastAPI):
     init_db()
     logger.info("Database initialized")
-    yield
+    sync_task = asyncio.create_task(run_periodic_sync())
+    try:
+        yield
+    finally:
+        sync_task.cancel()
+        try:
+            await sync_task
+        except asyncio.CancelledError:
+            logger.info("Background sync stopped")
 
 
 app = FastAPI(title="Clinic Sync Service", version="1.0.0", lifespan=lifespan)
