@@ -5,7 +5,6 @@
 | Tool | Model/Version | Used for |
 |------|---------------|----------|
 | OpenCode | GLM-5.3 Flash | Main code agent |
-| (other tool, if any) | | |
 
 ## 2. How I Used AI
 
@@ -19,17 +18,8 @@ Be specific: which task, in which part of the project.
 
 ## 3. Changed / Rejected from AI Output
 
-One entry per occurrence. Use this format:
-
-No entries yet (as of 2026-11-10).
-
-### (short title)
-- **AI suggestion:** what was proposed or generated
-- **Decision:** accepted with changes / rejected
-- **What I did:** what I changed, or what I replaced it with
-- **Reason:** why (performance, security, complexity, didn't fit the requirements, bug, etc.)
+No entries yet (as of 2026-11-12).
 
 ## 4. Additional Notes (optional)
 
-- Parts I wrote entirely on my own without AI:
-- Things I verified manually (tests, code review, etc.):
+- Things I verified manually (tests, code review, etc.): each fix's tests fail on the buggy baseline and pass after the fix; final suite 19/19 passing (`make test`); mock-API knobs (`MOCK_*` in `.env.example`) exercised via the `tests/conftest.py` shim, with `MOCK_TIMEOUT_RATE` disabled in tests to keep runs deterministic.

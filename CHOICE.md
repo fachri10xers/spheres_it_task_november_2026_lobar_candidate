@@ -1,0 +1,1 @@
+Task 2 (Offline-First Sync) - it continues directly from Task 1's sync domain (idempotent batches, duplicate patients, stock conflicts), exercises the full fullstack range (design -> API -> tests), and was achievable within the 3-day window.
