@@ -90,15 +90,15 @@ type store struct {
 }
 
 type Clinic struct {
-	ID       string
-	Name     string
-	Timezone string
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Timezone string `json:"timezone"`
 }
 
 type MedicineSeed struct {
-	ID       string
-	Name     string
-	Quantity int64
+	ID       string `json:"medicine_id"`
+	Name     string `json:"name"`
+	Quantity int64  `json:"quantity"`
 }
 
 type Patient struct {
