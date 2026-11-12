@@ -30,8 +30,8 @@ Scenario: two devices sync after 3 days offline — one registered "Siti Aminah"
 
 **Automatic (at sync)** — matching runs only for `patient_registration`:
 
-- **Exact NIK:** if the incoming `nik` equals an existing patient's NIK, store the record and flag `flagged_possible_duplicate_patient` with reason "exact NIK match" (highest confidence; no birth-date/name check needed).
-- **Fuzzy:** normalize both names (lowercase, strip punctuation and abbreviation dots) and treat edit distance ≤ 2 as similar — `"st aminah"` → `"siti aminah"` is exactly distance 2 — but compare only against patients **in the same `clinic_id` with exactly equal `birth_date`**. Blocking on clinic + birth date keeps matching cheap and dramatically cuts false positives. Match → store + flag with reason "similar name and birth date".
+- **Exact NIK:** if the incoming `nik` equals an existing patient's NIK, store the record and flag `flagged_possible_duplicate_patient` with reason "Exact NIK match" (highest confidence; no birth-date/name check needed). An **all-zero NIK** (`0000000000000000` — the sample data's placeholder for "no NIK") is treated as *no NIK* and never triggers an exact match, otherwise two NIK-less patients would false-positive against each other.
+- **Fuzzy:** normalize both names (lowercase, strip punctuation and abbreviation dots) and treat edit distance ≤ 2 as similar — `"st aminah"` → `"siti aminah"` is exactly distance 2 — against any existing patient **with exactly equal `birth_date`, regardless of clinic**. The contract's rule 4 names similar name + overlapping birth date with no clinic limit, and the realistic scenario puts the two "Siti Aminah" variants in different clinics (PKM-001 vs PKM-002) — a same-clinic block would flag nothing. Cross-clinic false positives are acceptable here: the review queue exists to absorb them. Match → store + flag with reason "Similar name and birth date".
 - No match → plain `accepted`. Flagged records are still stored under their own `server_id` and returned with `existing_patient_id`, per the contract.
 
 **Needs a human (review queue):**
