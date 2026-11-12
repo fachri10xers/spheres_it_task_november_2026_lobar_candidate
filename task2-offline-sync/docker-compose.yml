@@ -7,7 +7,4 @@ services:
       PORT: "8000"
       DB_PATH: /data/sync.db
     volumes:
-      - sync-data:/data
-
-volumes:
-  sync-data:
+      - .data:/data

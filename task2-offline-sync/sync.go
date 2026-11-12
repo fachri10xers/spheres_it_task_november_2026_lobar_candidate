@@ -58,56 +58,55 @@ var requiredFieldsByType = map[string][]string{
 	typeDispensing: {"visit_client_uuid", "medicine_id", "quantity"},
 }
 
-func handleSync(st *store) http.HandlerFunc {
+func handleSync(st *Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		req, ok := readSyncRequest(w, r)
 		if !ok {
 			return
 		}
-		st.mu.Lock()
-		defer st.mu.Unlock()
+		st.WithWriteLock(func() {
+			replay, found, err := st.LookupBatchResponse(req.BatchID)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			if found {
+				writeJSON(w, http.StatusOK, json.RawMessage(replay))
+				return
+			}
 
-		replay, found, err := st.lookupBatchResponse(req.BatchID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		if found {
-			writeJSON(w, http.StatusOK, json.RawMessage(replay))
-			return
-		}
-
-		receivedAt := nowRFC3339()
-		resp := syncResponse{
-			BatchID:          req.BatchID,
-			ServerReceivedAt: receivedAt,
-			Results:          []recordResult{},
-			StockUpdates:     []stockUpdate{},
-		}
-		stockIndex := map[string]int{}
-		for _, rec := range req.Records {
-			result, upd := processRecord(st, rec, receivedAt)
-			resp.Results = append(resp.Results, result)
-			if upd != nil {
-				if i, seen := stockIndex[upd.MedicineID]; seen {
-					resp.StockUpdates[i] = *upd
-				} else {
-					stockIndex[upd.MedicineID] = len(resp.StockUpdates)
-					resp.StockUpdates = append(resp.StockUpdates, *upd)
+			receivedAt := NowRFC3339()
+			resp := syncResponse{
+				BatchID:          req.BatchID,
+				ServerReceivedAt: receivedAt,
+				Results:          []recordResult{},
+				StockUpdates:     []stockUpdate{},
+			}
+			stockIndex := map[string]int{}
+			for _, rec := range req.Records {
+				result, upd := processRecord(st, rec, receivedAt)
+				resp.Results = append(resp.Results, result)
+				if upd != nil {
+					if i, seen := stockIndex[upd.MedicineID]; seen {
+						resp.StockUpdates[i] = *upd
+					} else {
+						stockIndex[upd.MedicineID] = len(resp.StockUpdates)
+						resp.StockUpdates = append(resp.StockUpdates, *upd)
+					}
 				}
 			}
-		}
 
-		body, err := json.Marshal(resp)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		if err := st.saveBatchResponse(req.BatchID, req.DeviceID, receivedAt, string(body)); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		writeJSON(w, http.StatusOK, json.RawMessage(body))
+			body, err := json.Marshal(resp)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			if err := st.SaveBatchResponse(req.BatchID, req.DeviceID, receivedAt, string(body)); err != nil {
+				writeError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			writeJSON(w, http.StatusOK, json.RawMessage(body))
+		})
 	}
 }
 
@@ -130,11 +129,11 @@ func readSyncRequest(w http.ResponseWriter, r *http.Request) (syncRequest, bool)
 	return req, false
 }
 
-func processRecord(st *store, rec syncRecordIn, receivedAt string) (recordResult, *stockUpdate) {
+func processRecord(st *Store, rec syncRecordIn, receivedAt string) (recordResult, *stockUpdate) {
 	if rec.ClientUUID == "" {
 		return rejectedResult(rec.ClientUUID, "missing required field: client_uuid"), nil
 	}
-	if _, found, err := st.lookupRecord(rec.ClientUUID); err != nil {
+	if _, found, err := st.LookupRecord(rec.ClientUUID); err != nil {
 		return rejectedResult(rec.ClientUUID, "storage error: "+err.Error()), nil
 	} else if found {
 		return recordResult{ClientUUID: rec.ClientUUID, Status: statusDuplicate}, nil
@@ -154,7 +153,7 @@ func processRecord(st *store, rec syncRecordIn, receivedAt string) (recordResult
 	}
 }
 
-func processPatientRecord(st *store, rec syncRecordIn, receivedAt string) (recordResult, *stockUpdate) {
+func processPatientRecord(st *Store, rec syncRecordIn, receivedAt string) (recordResult, *stockUpdate) {
 	data := rec.Data
 	for _, f := range requiredFieldsByType[typePatient] {
 		if _, ok := dataString(data, f); !ok {
@@ -162,7 +161,7 @@ func processPatientRecord(st *store, rec syncRecordIn, receivedAt string) (recor
 		}
 	}
 	p := Patient{
-		ServerID:         newUUIDv4(),
+		ServerID:         NewUUIDv4(),
 		ClientUUID:       rec.ClientUUID,
 		NIK:              str(data["nik"]),
 		Name:             str(data["name"]),
@@ -178,21 +177,21 @@ func processPatientRecord(st *store, rec syncRecordIn, receivedAt string) (recor
 		return rejectedResult(rec.ClientUUID, "storage error: "+err.Error()), nil
 	}
 	result := recordResult{ClientUUID: rec.ClientUUID, Status: statusAccepted, ServerID: p.ServerID}
-	tx, err := beginTx(st)
+	tx, err := st.BeginTx()
 	if err != nil {
 		return rejectedResult(rec.ClientUUID, "storage error: "+err.Error()), nil
 	}
 	defer tx.Rollback()
-	if err := insertPatientTx(tx, p); err != nil {
+	if err := InsertPatientTx(tx, p); err != nil {
 		return rejectedResult(rec.ClientUUID, "storage error: "+err.Error()), nil
 	}
-	if err := insertRecordTx(tx, recordEntry{ClientUUID: rec.ClientUUID, Type: typePatient, ServerID: p.ServerID, ReceivedAt: receivedAt}); err != nil {
+	if err := InsertRecordTx(tx, RecordEntry{ClientUUID: rec.ClientUUID, Type: typePatient, ServerID: p.ServerID, ReceivedAt: receivedAt}); err != nil {
 		return rejectedResult(rec.ClientUUID, "storage error: "+err.Error()), nil
 	}
 	if existing != nil {
 		result.Status = statusFlaggedDupPat
 		result.ExistingPatientID = existing.ServerID
-		if err := addReviewItemTx(tx, ReviewItem{
+		if err := AddReviewItemTx(tx, ReviewItem{
 			Type:              "possible_duplicate_patient",
 			NewPatientID:      p.ServerID,
 			ExistingPatientID: existing.ServerID,
@@ -208,7 +207,7 @@ func processPatientRecord(st *store, rec syncRecordIn, receivedAt string) (recor
 	return result, nil
 }
 
-func processVisitRecord(st *store, rec syncRecordIn, receivedAt string) (recordResult, *stockUpdate) {
+func processVisitRecord(st *Store, rec syncRecordIn, receivedAt string) (recordResult, *stockUpdate) {
 	data := rec.Data
 	for _, f := range requiredFieldsByType[typeVisit] {
 		if _, ok := dataString(data, f); !ok {
@@ -224,7 +223,7 @@ func processVisitRecord(st *store, rec syncRecordIn, receivedAt string) (recordR
 		return rejectedResult(rec.ClientUUID, "unknown patient_client_uuid: "+patientRef), nil
 	}
 	v := Visit{
-		ServerID:         newUUIDv4(),
+		ServerID:         NewUUIDv4(),
 		ClientUUID:       rec.ClientUUID,
 		PatientServerID:  patient.ServerID,
 		ClinicID:         str(data["clinic_id"]),
@@ -235,15 +234,15 @@ func processVisitRecord(st *store, rec syncRecordIn, receivedAt string) (recordR
 		DeviceRecordedAt: rec.DeviceRecordedAt,
 		ReceivedAt:       receivedAt,
 	}
-	tx, err := beginTx(st)
+	tx, err := st.BeginTx()
 	if err != nil {
 		return rejectedResult(rec.ClientUUID, "storage error: "+err.Error()), nil
 	}
 	defer tx.Rollback()
-	if err := insertVisitTx(tx, v); err != nil {
+	if err := InsertVisitTx(tx, v); err != nil {
 		return rejectedResult(rec.ClientUUID, "storage error: "+err.Error()), nil
 	}
-	if err := insertRecordTx(tx, recordEntry{ClientUUID: rec.ClientUUID, Type: typeVisit, ServerID: v.ServerID, ReceivedAt: receivedAt}); err != nil {
+	if err := InsertRecordTx(tx, RecordEntry{ClientUUID: rec.ClientUUID, Type: typeVisit, ServerID: v.ServerID, ReceivedAt: receivedAt}); err != nil {
 		return rejectedResult(rec.ClientUUID, "storage error: "+err.Error()), nil
 	}
 	if err := tx.Commit(); err != nil {
@@ -252,7 +251,7 @@ func processVisitRecord(st *store, rec syncRecordIn, receivedAt string) (recordR
 	return recordResult{ClientUUID: rec.ClientUUID, Status: statusAccepted, ServerID: v.ServerID}, nil
 }
 
-func processDispensingRecord(st *store, rec syncRecordIn, receivedAt string) (recordResult, *stockUpdate) {
+func processDispensingRecord(st *Store, rec syncRecordIn, receivedAt string) (recordResult, *stockUpdate) {
 	data := rec.Data
 	for _, f := range []string{"visit_client_uuid", "medicine_id"} {
 		if _, ok := dataString(data, f); !ok {
@@ -272,7 +271,7 @@ func processDispensingRecord(st *store, rec syncRecordIn, receivedAt string) (re
 		return rejectedResult(rec.ClientUUID, "unknown visit_client_uuid: "+visitRef), nil
 	}
 	medicineID := str(data["medicine_id"])
-	prevStock, exists, err := st.currentStock(medicineID)
+	prevStock, exists, err := st.CurrentStock(medicineID)
 	if err != nil {
 		return rejectedResult(rec.ClientUUID, "storage error: "+err.Error()), nil
 	}
@@ -281,7 +280,7 @@ func processDispensingRecord(st *store, rec syncRecordIn, receivedAt string) (re
 	}
 	newStock := prevStock - quantity
 	d := Dispensing{
-		ServerID:         newUUIDv4(),
+		ServerID:         NewUUIDv4(),
 		ClientUUID:       rec.ClientUUID,
 		VisitServerID:    visit.ServerID,
 		MedicineID:       medicineID,
@@ -289,22 +288,22 @@ func processDispensingRecord(st *store, rec syncRecordIn, receivedAt string) (re
 		DeviceRecordedAt: rec.DeviceRecordedAt,
 		ReceivedAt:       receivedAt,
 	}
-	tx, err := beginTx(st)
+	tx, err := st.BeginTx()
 	if err != nil {
 		return rejectedResult(rec.ClientUUID, "storage error: "+err.Error()), nil
 	}
 	defer tx.Rollback()
-	if err := insertDispensingTx(tx, d); err != nil {
+	if err := InsertDispensingTx(tx, d); err != nil {
 		return rejectedResult(rec.ClientUUID, "storage error: "+err.Error()), nil
 	}
-	if err := insertRecordTx(tx, recordEntry{ClientUUID: rec.ClientUUID, Type: typeDispensing, ServerID: d.ServerID, ReceivedAt: receivedAt}); err != nil {
+	if err := InsertRecordTx(tx, RecordEntry{ClientUUID: rec.ClientUUID, Type: typeDispensing, ServerID: d.ServerID, ReceivedAt: receivedAt}); err != nil {
 		return rejectedResult(rec.ClientUUID, "storage error: "+err.Error()), nil
 	}
-	if err := addLedgerTx(tx, medicineID, -quantity, &rec.ClientUUID, receivedAt); err != nil {
+	if err := AddLedgerTx(tx, medicineID, -quantity, &rec.ClientUUID, receivedAt); err != nil {
 		return rejectedResult(rec.ClientUUID, "storage error: "+err.Error()), nil
 	}
 	if newStock < 0 {
-		if err := addReviewItemTx(tx, ReviewItem{
+		if err := AddReviewItemTx(tx, ReviewItem{
 			Type:         "negative_stock",
 			MedicineID:   medicineID,
 			CurrentStock: newStock,
@@ -320,8 +319,8 @@ func processDispensingRecord(st *store, rec syncRecordIn, receivedAt string) (re
 		&stockUpdate{MedicineID: medicineID, CurrentStock: newStock}
 }
 
-func resolveRecordOf(st *store, clientUUID, wantType string) (*recordEntry, error) {
-	entry, found, err := st.lookupRecord(clientUUID)
+func resolveRecordOf(st *Store, clientUUID, wantType string) (*RecordEntry, error) {
+	entry, found, err := st.LookupRecord(clientUUID)
 	if err != nil {
 		return nil, fmt.Errorf("storage error: %s", err.Error())
 	}

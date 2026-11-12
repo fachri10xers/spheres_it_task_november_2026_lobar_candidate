@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 )
 
@@ -42,9 +43,9 @@ type resetResponse struct {
 	Medicines int    `json:"medicines"`
 }
 
-func handleGetPatient(st *store) http.HandlerFunc {
+func handleGetPatient(st *Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		p, found, err := st.patientByServerID(r.PathValue("id"))
+		p, found, err := st.PatientByServerID(r.PathValue("id"))
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -67,10 +68,10 @@ func handleGetPatient(st *store) http.HandlerFunc {
 	}
 }
 
-func handleGetStock(st *store) http.HandlerFunc {
+func handleGetStock(st *Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		medicineID := r.PathValue("id")
-		currentStock, exists, err := st.currentStock(medicineID)
+		currentStock, exists, err := st.CurrentStock(medicineID)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -83,9 +84,9 @@ func handleGetStock(st *store) http.HandlerFunc {
 	}
 }
 
-func handleReviewQueue(st *store) http.HandlerFunc {
+func handleReviewQueue(st *Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		items, err := st.listReviewItems()
+		items, err := st.ListReviewItems()
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -114,7 +115,7 @@ func handleReviewQueue(st *store) http.HandlerFunc {
 	}
 }
 
-func handleReset(st *store) http.HandlerFunc {
+func handleReset(st *Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			Clinics []Clinic       `json:"clinics"`
@@ -124,16 +125,17 @@ func handleReset(st *store) http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, "invalid request body")
 			return
 		}
-		st.mu.Lock()
-		defer st.mu.Unlock()
-		if err := st.reset(body.Clinics, body.Stock); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		writeJSON(w, http.StatusOK, resetResponse{
-			Status:    "reset",
-			Clinics:   len(body.Clinics),
-			Medicines: len(body.Stock),
+		st.WithWriteLock(func() {
+			if err := st.Reset(body.Clinics, body.Stock); err != nil {
+				writeError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			log.Printf("reset: wiped prior state, seeded %d clinics, %d medicines", len(body.Clinics), len(body.Stock))
+			writeJSON(w, http.StatusOK, resetResponse{
+				Status:    "reset",
+				Clinics:   len(body.Clinics),
+				Medicines: len(body.Stock),
+			})
 		})
 	}
 }

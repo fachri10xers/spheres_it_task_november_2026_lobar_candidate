@@ -4,6 +4,8 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -84,7 +86,7 @@ CREATE TABLE IF NOT EXISTS review_queue (
 );
 `
 
-type store struct {
+type Store struct {
 	db *sql.DB
 	mu sync.Mutex
 }
@@ -147,14 +149,19 @@ type ReviewItem struct {
 	CreatedAt         string
 }
 
-type recordEntry struct {
+type RecordEntry struct {
 	ClientUUID string
 	Type       string
 	ServerID   string
 	ReceivedAt string
 }
 
-func openStore(path string) (*store, error) {
+func Open(path string) (*Store, error) {
+	if dir := filepath.Dir(path); dir != "" {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return nil, fmt.Errorf("create database directory: %w", err)
+		}
+	}
 	dsn := path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
@@ -164,14 +171,20 @@ func openStore(path string) (*store, error) {
 		db.Close()
 		return nil, fmt.Errorf("apply schema: %w", err)
 	}
-	return &store{db: db}, nil
+	return &Store{db: db}, nil
 }
 
-func (s *store) close() error {
+func (s *Store) Close() error {
 	return s.db.Close()
 }
 
-func (s *store) reset(clinics []Clinic, stock []MedicineSeed) error {
+func (s *Store) WithWriteLock(fn func()) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	fn()
+}
+
+func (s *Store) Reset(clinics []Clinic, stock []MedicineSeed) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("begin reset: %w", err)
@@ -185,7 +198,7 @@ func (s *store) reset(clinics []Clinic, stock []MedicineSeed) error {
 			return fmt.Errorf("clear %s: %w", table, err)
 		}
 	}
-	now := nowRFC3339()
+	now := NowRFC3339()
 	for _, c := range clinics {
 		if _, err := tx.Exec(
 			`INSERT INTO clinics (id, name, timezone) VALUES (?, ?, ?)`,
@@ -201,7 +214,7 @@ func (s *store) reset(clinics []Clinic, stock []MedicineSeed) error {
 		); err != nil {
 			return fmt.Errorf("seed medicine %s: %w", m.ID, err)
 		}
-		if err := addLedgerTx(tx, m.ID, m.Quantity, nil, now); err != nil {
+		if err := AddLedgerTx(tx, m.ID, m.Quantity, nil, now); err != nil {
 			return fmt.Errorf("seed opening balance for %s: %w", m.ID, err)
 		}
 	}
@@ -211,7 +224,7 @@ func (s *store) reset(clinics []Clinic, stock []MedicineSeed) error {
 	return nil
 }
 
-func (s *store) currentStock(medicineID string) (int64, bool, error) {
+func (s *Store) CurrentStock(medicineID string) (int64, bool, error) {
 	var sum int64
 	var n int
 	err := s.db.QueryRow(
@@ -228,22 +241,22 @@ func (s *store) currentStock(medicineID string) (int64, bool, error) {
 	return sum, true, nil
 }
 
-func (s *store) lookupRecord(clientUUID string) (recordEntry, bool, error) {
-	var e recordEntry
+func (s *Store) LookupRecord(clientUUID string) (RecordEntry, bool, error) {
+	var e RecordEntry
 	err := s.db.QueryRow(
 		`SELECT client_uuid, type, server_id, received_at FROM records WHERE client_uuid = ?`,
 		clientUUID,
 	).Scan(&e.ClientUUID, &e.Type, &e.ServerID, &e.ReceivedAt)
 	if err == sql.ErrNoRows {
-		return recordEntry{}, false, nil
+		return RecordEntry{}, false, nil
 	}
 	if err != nil {
-		return recordEntry{}, false, fmt.Errorf("lookup record: %w", err)
+		return RecordEntry{}, false, fmt.Errorf("lookup record: %w", err)
 	}
 	return e, true, nil
 }
 
-func (s *store) saveBatchResponse(batchID, deviceID, receivedAt, response string) error {
+func (s *Store) SaveBatchResponse(batchID, deviceID, receivedAt, response string) error {
 	if _, err := s.db.Exec(
 		`INSERT INTO batch_responses (batch_id, device_id, received_at, response) VALUES (?, ?, ?, ?)`,
 		batchID, deviceID, receivedAt, response,
@@ -253,7 +266,7 @@ func (s *store) saveBatchResponse(batchID, deviceID, receivedAt, response string
 	return nil
 }
 
-func (s *store) lookupBatchResponse(batchID string) (string, bool, error) {
+func (s *Store) LookupBatchResponse(batchID string) (string, bool, error) {
 	var response string
 	err := s.db.QueryRow(
 		`SELECT response FROM batch_responses WHERE batch_id = ?`,
@@ -268,7 +281,7 @@ func (s *store) lookupBatchResponse(batchID string) (string, bool, error) {
 	return response, true, nil
 }
 
-func (s *store) listReviewItems() ([]ReviewItem, error) {
+func (s *Store) ListReviewItems() ([]ReviewItem, error) {
 	rows, err := s.db.Query(
 		`SELECT type, new_patient_id, existing_patient_id, reason, medicine_id, current_stock, created_at
 		 FROM review_queue ORDER BY seq`,
@@ -288,7 +301,7 @@ func (s *store) listReviewItems() ([]ReviewItem, error) {
 	return items, rows.Err()
 }
 
-func (s *store) patientByServerID(serverID string) (Patient, bool, error) {
+func (s *Store) PatientByServerID(serverID string) (Patient, bool, error) {
 	var p Patient
 	err := s.db.QueryRow(
 		`SELECT server_id, client_uuid, nik, name, birth_date, gender, address, clinic_id, received_at
@@ -304,14 +317,22 @@ func (s *store) patientByServerID(serverID string) (Patient, bool, error) {
 	return p, true, nil
 }
 
-func (s *store) patientsByBirthDate(birthDate string) ([]Patient, error) {
-	rows, err := s.db.Query(
+func (s *Store) PatientsByBirthDate(birthDate string) ([]Patient, error) {
+	return queryPatients(s.db,
 		`SELECT server_id, client_uuid, nik, name, birth_date, gender, address, clinic_id, received_at
-		 FROM patients WHERE birth_date = ? ORDER BY received_at ASC, rowid ASC`,
-		birthDate,
-	)
+		 FROM patients WHERE birth_date = ? ORDER BY received_at ASC, rowid ASC`, birthDate)
+}
+
+func (s *Store) PatientsByNIK(nik string) ([]Patient, error) {
+	return queryPatients(s.db,
+		`SELECT server_id, client_uuid, nik, name, birth_date, gender, address, clinic_id, received_at
+		 FROM patients WHERE nik = ? ORDER BY received_at ASC, rowid ASC`, nik)
+}
+
+func queryPatients(db *sql.DB, query, arg string) ([]Patient, error) {
+	rows, err := db.Query(query, arg)
 	if err != nil {
-		return nil, fmt.Errorf("query patients by birth date: %w", err)
+		return nil, fmt.Errorf("query patients: %w", err)
 	}
 	defer rows.Close()
 	var out []Patient
@@ -325,28 +346,7 @@ func (s *store) patientsByBirthDate(birthDate string) ([]Patient, error) {
 	return out, rows.Err()
 }
 
-func (s *store) patientsByNIK(nik string) ([]Patient, error) {
-	rows, err := s.db.Query(
-		`SELECT server_id, client_uuid, nik, name, birth_date, gender, address, clinic_id, received_at
-		 FROM patients WHERE nik = ? ORDER BY received_at ASC, rowid ASC`,
-		nik,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("query patients by NIK: %w", err)
-	}
-	defer rows.Close()
-	var out []Patient
-	for rows.Next() {
-		var p Patient
-		if err := rows.Scan(&p.ServerID, &p.ClientUUID, &p.NIK, &p.Name, &p.BirthDate, &p.Gender, &p.Address, &p.ClinicID, &p.ReceivedAt); err != nil {
-			return nil, fmt.Errorf("scan patient: %w", err)
-		}
-		out = append(out, p)
-	}
-	return out, rows.Err()
-}
-
-func beginTx(s *store) (*sql.Tx, error) {
+func (s *Store) BeginTx() (*sql.Tx, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return nil, fmt.Errorf("begin transaction: %w", err)
@@ -354,7 +354,7 @@ func beginTx(s *store) (*sql.Tx, error) {
 	return tx, nil
 }
 
-func addLedgerTx(tx *sql.Tx, medicineID string, delta int64, ref *string, createdAt string) error {
+func AddLedgerTx(tx *sql.Tx, medicineID string, delta int64, ref *string, createdAt string) error {
 	if _, err := tx.Exec(
 		`INSERT INTO stock_ledger (medicine_id, delta, ref_client_uuid, created_at) VALUES (?, ?, ?, ?)`,
 		medicineID, delta, ref, createdAt,
@@ -364,7 +364,7 @@ func addLedgerTx(tx *sql.Tx, medicineID string, delta int64, ref *string, create
 	return nil
 }
 
-func insertRecordTx(tx *sql.Tx, e recordEntry) error {
+func InsertRecordTx(tx *sql.Tx, e RecordEntry) error {
 	if _, err := tx.Exec(
 		`INSERT INTO records (client_uuid, type, server_id, received_at) VALUES (?, ?, ?, ?)`,
 		e.ClientUUID, e.Type, e.ServerID, e.ReceivedAt,
@@ -374,7 +374,7 @@ func insertRecordTx(tx *sql.Tx, e recordEntry) error {
 	return nil
 }
 
-func insertPatientTx(tx *sql.Tx, p Patient) error {
+func InsertPatientTx(tx *sql.Tx, p Patient) error {
 	if _, err := tx.Exec(
 		`INSERT INTO patients (server_id, client_uuid, nik, name, birth_date, gender, address, clinic_id, device_recorded_at, received_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -385,7 +385,7 @@ func insertPatientTx(tx *sql.Tx, p Patient) error {
 	return nil
 }
 
-func insertVisitTx(tx *sql.Tx, v Visit) error {
+func InsertVisitTx(tx *sql.Tx, v Visit) error {
 	if _, err := tx.Exec(
 		`INSERT INTO visits (server_id, client_uuid, patient_server_id, clinic_id, polyclinic, visit_date, diagnosis, notes, device_recorded_at, received_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -396,7 +396,7 @@ func insertVisitTx(tx *sql.Tx, v Visit) error {
 	return nil
 }
 
-func insertDispensingTx(tx *sql.Tx, d Dispensing) error {
+func InsertDispensingTx(tx *sql.Tx, d Dispensing) error {
 	if _, err := tx.Exec(
 		`INSERT INTO dispensings (server_id, client_uuid, visit_server_id, medicine_id, quantity, device_recorded_at, received_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -407,7 +407,7 @@ func insertDispensingTx(tx *sql.Tx, d Dispensing) error {
 	return nil
 }
 
-func addReviewItemTx(tx *sql.Tx, item ReviewItem) error {
+func AddReviewItemTx(tx *sql.Tx, item ReviewItem) error {
 	if _, err := tx.Exec(
 		`INSERT INTO review_queue (type, new_patient_id, existing_patient_id, reason, medicine_id, current_stock, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -418,7 +418,7 @@ func addReviewItemTx(tx *sql.Tx, item ReviewItem) error {
 	return nil
 }
 
-func newUUIDv4() string {
+func NewUUIDv4() string {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {
 		panic(fmt.Errorf("generate uuid: %w", err))
@@ -428,6 +428,6 @@ func newUUIDv4() string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
-func nowRFC3339() string {
+func NowRFC3339() string {
 	return time.Now().UTC().Format(time.RFC3339)
 }

@@ -57,16 +57,16 @@ func TestIsNoNIK(t *testing.T) {
 	}
 }
 
-func seedPatient(t *testing.T, st *store, p Patient) {
+func seedPatient(t *testing.T, st *Store, p Patient) {
 	t.Helper()
-	tx, err := beginTx(st)
+	tx, err := st.BeginTx()
 	if err != nil {
 		t.Fatalf("begin: %v", err)
 	}
-	if err := insertPatientTx(tx, p); err != nil {
+	if err := InsertPatientTx(tx, p); err != nil {
 		t.Fatalf("seed patient: %v", err)
 	}
-	if err := insertRecordTx(tx, recordEntry{ClientUUID: p.ClientUUID, Type: typePatient, ServerID: p.ServerID, ReceivedAt: p.ReceivedAt}); err != nil {
+	if err := InsertRecordTx(tx, RecordEntry{ClientUUID: p.ClientUUID, Type: typePatient, ServerID: p.ServerID, ReceivedAt: p.ReceivedAt}); err != nil {
 		t.Fatalf("seed record: %v", err)
 	}
 	if err := tx.Commit(); err != nil {

@@ -3,23 +3,47 @@ package main
 import (
 	"path/filepath"
 	"testing"
+	"time"
 )
 
-func openTestStore(t *testing.T) *store {
+func openTestStore(t *testing.T) *Store {
 	t.Helper()
-	st, err := openStore(filepath.Join(t.TempDir(), "test.db"))
+	st, err := Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
-		t.Fatalf("openStore: %v", err)
+		t.Fatalf("Open: %v", err)
 	}
-	t.Cleanup(func() { st.close() })
+	t.Cleanup(func() { st.Close() })
 	return st
 }
 
 func ptrString(s string) *string { return &s }
 
+func TestOpenCreatesMissingParentDirectory(t *testing.T) {
+	st := openTestStore(t)
+	st.Close()
+
+	fresh := filepath.Join(t.TempDir(), "missing", "nested", "sync.db")
+	opened, err := Open(fresh)
+	if err != nil {
+		t.Fatalf("Open with missing parent dirs: %v", err)
+	}
+	t.Cleanup(func() { opened.Close() })
+
+	if err := opened.Reset(
+		[]Clinic{{ID: "PKM-001", Name: "Puskesmas Sandik Raya", Timezone: "Asia/Makassar"}},
+		[]MedicineSeed{{ID: "MED-001", Name: "Paracetamol 500mg", Quantity: 5000}},
+	); err != nil {
+		t.Fatalf("Reset: %v", err)
+	}
+	got, ok, err := opened.CurrentStock("MED-001")
+	if err != nil || !ok || got != 5000 {
+		t.Fatalf("MED-001 stock = %d, ok=%v, err=%v; want 5000, ok", got, ok, err)
+	}
+}
+
 func TestResetSeedsOpeningLedger(t *testing.T) {
 	st := openTestStore(t)
-	err := st.reset(
+	err := st.Reset(
 		[]Clinic{{ID: "PKM-001", Name: "Puskesmas Sandik Raya", Timezone: "Asia/Makassar"}},
 		[]MedicineSeed{
 			{ID: "MED-001", Name: "Paracetamol 500mg", Quantity: 5000},
@@ -27,17 +51,17 @@ func TestResetSeedsOpeningLedger(t *testing.T) {
 		},
 	)
 	if err != nil {
-		t.Fatalf("reset: %v", err)
+		t.Fatalf("Reset: %v", err)
 	}
-	got, ok, err := st.currentStock("MED-001")
+	got, ok, err := st.CurrentStock("MED-001")
 	if err != nil || !ok || got != 5000 {
 		t.Fatalf("MED-001 stock = %d, ok=%v, err=%v; want 5000, ok", got, ok, err)
 	}
-	got, ok, err = st.currentStock("MED-003")
+	got, ok, err = st.CurrentStock("MED-003")
 	if err != nil || !ok || got != 20 {
 		t.Fatalf("MED-003 stock = %d, ok=%v, err=%v; want 20, ok", got, ok, err)
 	}
-	_, ok, err = st.currentStock("MED-UNKNOWN")
+	_, ok, err = st.CurrentStock("MED-UNKNOWN")
 	if err != nil || ok {
 		t.Fatalf("unknown medicine ok=%v err=%v; want ok=false, nil error", ok, err)
 	}
@@ -45,36 +69,36 @@ func TestResetSeedsOpeningLedger(t *testing.T) {
 
 func TestLedgerAppendOnlyDerivation(t *testing.T) {
 	st := openTestStore(t)
-	if err := st.reset(nil, []MedicineSeed{{ID: "MED-003", Name: "ORS (Oralit)", Quantity: 20}}); err != nil {
-		t.Fatalf("reset: %v", err)
+	if err := st.Reset(nil, []MedicineSeed{{ID: "MED-003", Name: "ORS (Oralit)", Quantity: 20}}); err != nil {
+		t.Fatalf("Reset: %v", err)
 	}
 
-	tx, err := beginTx(st)
+	tx, err := st.BeginTx()
 	if err != nil {
-		t.Fatalf("begin: %v", err)
+		t.Fatalf("BeginTx: %v", err)
 	}
-	if err := addLedgerTx(tx, "MED-003", -15, ptrString("disp-c001"), nowRFC3339()); err != nil {
+	if err := AddLedgerTx(tx, "MED-003", -15, ptrString("disp-c001"), NowRFC3339()); err != nil {
 		t.Fatalf("ledger -15: %v", err)
 	}
 	if err := tx.Commit(); err != nil {
 		t.Fatalf("commit: %v", err)
 	}
-	got, _, _ := st.currentStock("MED-003")
+	got, _, _ := st.CurrentStock("MED-003")
 	if got != 5 {
 		t.Fatalf("stock after -15 = %d; want 5", got)
 	}
 
-	tx, err = beginTx(st)
+	tx, err = st.BeginTx()
 	if err != nil {
-		t.Fatalf("begin: %v", err)
+		t.Fatalf("BeginTx: %v", err)
 	}
-	if err := addLedgerTx(tx, "MED-003", -10, ptrString("disp-c002"), nowRFC3339()); err != nil {
+	if err := AddLedgerTx(tx, "MED-003", -10, ptrString("disp-c002"), NowRFC3339()); err != nil {
 		t.Fatalf("ledger -10: %v", err)
 	}
 	if err := tx.Commit(); err != nil {
 		t.Fatalf("commit: %v", err)
 	}
-	got, _, _ = st.currentStock("MED-003")
+	got, _, _ = st.CurrentStock("MED-003")
 	if got != -5 {
 		t.Fatalf("stock after -10 = %d; want -5", got)
 	}
@@ -82,29 +106,29 @@ func TestLedgerAppendOnlyDerivation(t *testing.T) {
 
 func TestLedgerRefUniqueGuardsDoubleApply(t *testing.T) {
 	st := openTestStore(t)
-	if err := st.reset(nil, []MedicineSeed{{ID: "MED-001", Name: "Paracetamol 500mg", Quantity: 5000}}); err != nil {
-		t.Fatalf("reset: %v", err)
+	if err := st.Reset(nil, []MedicineSeed{{ID: "MED-001", Name: "Paracetamol 500mg", Quantity: 5000}}); err != nil {
+		t.Fatalf("Reset: %v", err)
 	}
-	tx, err := beginTx(st)
+	tx, err := st.BeginTx()
 	if err != nil {
-		t.Fatalf("begin: %v", err)
+		t.Fatalf("BeginTx: %v", err)
 	}
-	if err := addLedgerTx(tx, "MED-001", -10, ptrString("disp-a001"), nowRFC3339()); err != nil {
+	if err := AddLedgerTx(tx, "MED-001", -10, ptrString("disp-a001"), NowRFC3339()); err != nil {
 		t.Fatalf("first ledger row: %v", err)
 	}
 	if err := tx.Commit(); err != nil {
 		t.Fatalf("commit: %v", err)
 	}
-	tx, err = beginTx(st)
+	tx, err = st.BeginTx()
 	if err != nil {
-		t.Fatalf("begin 2: %v", err)
+		t.Fatalf("BeginTx 2: %v", err)
 	}
-	if err := addLedgerTx(tx, "MED-001", -10, ptrString("disp-a001"), nowRFC3339()); err == nil {
+	if err := AddLedgerTx(tx, "MED-001", -10, ptrString("disp-a001"), NowRFC3339()); err == nil {
 		t.Fatalf("second ledger row with same ref must fail, got nil")
 	} else {
 		tx.Rollback()
 	}
-	got, _, _ := st.currentStock("MED-001")
+	got, _, _ := st.CurrentStock("MED-001")
 	if got != 4990 {
 		t.Fatalf("stock = %d; want 4990 (no double apply)", got)
 	}
@@ -112,22 +136,22 @@ func TestLedgerRefUniqueGuardsDoubleApply(t *testing.T) {
 
 func TestRecordRegistryRoundTrip(t *testing.T) {
 	st := openTestStore(t)
-	_, found, err := st.lookupRecord("pat-a001")
+	_, found, err := st.LookupRecord("pat-a001")
 	if err != nil || found {
 		t.Fatalf("empty registry lookup found=%v err=%v; want false", found, err)
 	}
-	tx, err := beginTx(st)
+	tx, err := st.BeginTx()
 	if err != nil {
-		t.Fatalf("begin: %v", err)
+		t.Fatalf("BeginTx: %v", err)
 	}
-	entry := recordEntry{ClientUUID: "pat-a001", Type: "patient_registration", ServerID: "srv-111", ReceivedAt: "2026-11-11T00:00:00Z"}
-	if err := insertRecordTx(tx, entry); err != nil {
+	entry := RecordEntry{ClientUUID: "pat-a001", Type: "patient_registration", ServerID: "srv-111", ReceivedAt: "2026-11-11T00:00:00Z"}
+	if err := InsertRecordTx(tx, entry); err != nil {
 		t.Fatalf("register: %v", err)
 	}
 	if err := tx.Commit(); err != nil {
 		t.Fatalf("commit: %v", err)
 	}
-	got, found, err := st.lookupRecord("pat-a001")
+	got, found, err := st.LookupRecord("pat-a001")
 	if err != nil || !found {
 		t.Fatalf("lookup found=%v err=%v; want true", found, err)
 	}
@@ -138,15 +162,15 @@ func TestRecordRegistryRoundTrip(t *testing.T) {
 
 func TestBatchResponseReplayStorage(t *testing.T) {
 	st := openTestStore(t)
-	_, found, err := st.lookupBatchResponse("batch-x")
+	_, found, err := st.LookupBatchResponse("batch-x")
 	if err != nil || found {
 		t.Fatalf("missing batch found=%v err=%v; want false", found, err)
 	}
 	original := `{"batch_id":"batch-x","results":[]}`
-	if err := st.saveBatchResponse("batch-x", "device-a", nowRFC3339(), original); err != nil {
+	if err := st.SaveBatchResponse("batch-x", "device-a", NowRFC3339(), original); err != nil {
 		t.Fatalf("save: %v", err)
 	}
-	got, found, err := st.lookupBatchResponse("batch-x")
+	got, found, err := st.LookupBatchResponse("batch-x")
 	if err != nil || !found {
 		t.Fatalf("replay lookup found=%v err=%v; want true", found, err)
 	}
@@ -157,22 +181,22 @@ func TestBatchResponseReplayStorage(t *testing.T) {
 
 func TestReviewItemRoundTrip(t *testing.T) {
 	st := openTestStore(t)
-	tx, err := beginTx(st)
+	tx, err := st.BeginTx()
 	if err != nil {
-		t.Fatalf("begin: %v", err)
+		t.Fatalf("BeginTx: %v", err)
 	}
-	pat := ReviewItem{Type: "possible_duplicate_patient", NewPatientID: "srv-new", ExistingPatientID: "srv-old", Reason: "Similar name and birth date", CreatedAt: nowRFC3339()}
-	stock := ReviewItem{Type: "negative_stock", MedicineID: "MED-003", CurrentStock: -5, CreatedAt: nowRFC3339()}
-	if err := addReviewItemTx(tx, pat); err != nil {
+	pat := ReviewItem{Type: "possible_duplicate_patient", NewPatientID: "srv-new", ExistingPatientID: "srv-old", Reason: "Similar name and birth date", CreatedAt: NowRFC3339()}
+	stock := ReviewItem{Type: "negative_stock", MedicineID: "MED-003", CurrentStock: -5, CreatedAt: NowRFC3339()}
+	if err := AddReviewItemTx(tx, pat); err != nil {
 		t.Fatalf("add pat item: %v", err)
 	}
-	if err := addReviewItemTx(tx, stock); err != nil {
+	if err := AddReviewItemTx(tx, stock); err != nil {
 		t.Fatalf("add stock item: %v", err)
 	}
 	if err := tx.Commit(); err != nil {
 		t.Fatalf("commit: %v", err)
 	}
-	items, err := st.listReviewItems()
+	items, err := st.ListReviewItems()
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -189,87 +213,87 @@ func TestReviewItemRoundTrip(t *testing.T) {
 
 func TestPatientQueryHelpers(t *testing.T) {
 	st := openTestStore(t)
-	tx, err := beginTx(st)
+	tx, err := st.BeginTx()
 	if err != nil {
-		t.Fatalf("begin: %v", err)
+		t.Fatalf("BeginTx: %v", err)
 	}
 	p1 := Patient{ServerID: "srv-1", ClientUUID: "pat-1", NIK: "0000000000000000", Name: "St. Aminah", BirthDate: "1990-06-15", Gender: "F", Address: "Dusun", ClinicID: "PKM-001", ReceivedAt: "2026-11-11T00:00:00Z"}
 	p2 := Patient{ServerID: "srv-2", ClientUUID: "pat-2", NIK: "5201146106900005", Name: "SITI AMINAH", BirthDate: "1990-06-15", Gender: "F", Address: "Dusun", ClinicID: "PKM-002", ReceivedAt: "2026-11-11T00:00:01Z"}
-	if err := insertPatientTx(tx, p1); err != nil {
+	if err := InsertPatientTx(tx, p1); err != nil {
 		t.Fatalf("insert p1: %v", err)
 	}
-	if err := insertPatientTx(tx, p2); err != nil {
+	if err := InsertPatientTx(tx, p2); err != nil {
 		t.Fatalf("insert p2: %v", err)
 	}
 	if err := tx.Commit(); err != nil {
 		t.Fatalf("commit: %v", err)
 	}
 
-	got, found, err := st.patientByServerID("srv-1")
+	got, found, err := st.PatientByServerID("srv-1")
 	if err != nil || !found || got.Name != "St. Aminah" {
-		t.Fatalf("patientByServerID: %+v found=%v err=%v", got, found, err)
+		t.Fatalf("PatientByServerID: %+v found=%v err=%v", got, found, err)
 	}
-	_, found, err = st.patientByServerID("srv-none")
+	_, found, err = st.PatientByServerID("srv-none")
 	if err != nil || found {
 		t.Fatalf("missing patient found=%v err=%v; want false", found, err)
 	}
 
-	byNIK, err := st.patientsByNIK("5201146106900005")
+	byNIK, err := st.PatientsByNIK("5201146106900005")
 	if err != nil || len(byNIK) != 1 || byNIK[0].ServerID != "srv-2" {
-		t.Fatalf("patientsByNIK: %+v err=%v", byNIK, err)
+		t.Fatalf("PatientsByNIK: %+v err=%v", byNIK, err)
 	}
-	byBirth, err := st.patientsByBirthDate("1990-06-15")
+	byBirth, err := st.PatientsByBirthDate("1990-06-15")
 	if err != nil || len(byBirth) != 2 {
-		t.Fatalf("patientsByBirthDate: %+v err=%v", byBirth, err)
+		t.Fatalf("PatientsByBirthDate: %+v err=%v", byBirth, err)
 	}
 	if byBirth[0].ServerID != "srv-1" || byBirth[1].ServerID != "srv-2" {
-		t.Fatalf("patientsByBirthDate not in arrival order: %+v", byBirth)
+		t.Fatalf("PatientsByBirthDate not in arrival order: %+v", byBirth)
 	}
 }
 
 func TestResetClearsAllState(t *testing.T) {
 	st := openTestStore(t)
-	if err := st.reset(nil, []MedicineSeed{{ID: "MED-001", Name: "Paracetamol 500mg", Quantity: 5000}}); err != nil {
-		t.Fatalf("reset 1: %v", err)
+	if err := st.Reset(nil, []MedicineSeed{{ID: "MED-001", Name: "Paracetamol 500mg", Quantity: 5000}}); err != nil {
+		t.Fatalf("Reset 1: %v", err)
 	}
-	if err := st.saveBatchResponse("batch-x", "device-a", nowRFC3339(), `{"batch_id":"batch-x"}`); err != nil {
+	if err := st.SaveBatchResponse("batch-x", "device-a", NowRFC3339(), `{"batch_id":"batch-x"}`); err != nil {
 		t.Fatalf("save: %v", err)
 	}
-	tx, err := beginTx(st)
+	tx, err := st.BeginTx()
 	if err != nil {
-		t.Fatalf("begin: %v", err)
+		t.Fatalf("BeginTx: %v", err)
 	}
-	if err := insertRecordTx(tx, recordEntry{ClientUUID: "pat-1", Type: "patient_registration", ServerID: "srv-1", ReceivedAt: nowRFC3339()}); err != nil {
+	if err := InsertRecordTx(tx, RecordEntry{ClientUUID: "pat-1", Type: "patient_registration", ServerID: "srv-1", ReceivedAt: NowRFC3339()}); err != nil {
 		t.Fatalf("register: %v", err)
 	}
-	if err := addReviewItemTx(tx, ReviewItem{Type: "negative_stock", MedicineID: "MED-001", CurrentStock: -1, CreatedAt: nowRFC3339()}); err != nil {
+	if err := AddReviewItemTx(tx, ReviewItem{Type: "negative_stock", MedicineID: "MED-001", CurrentStock: -1, CreatedAt: NowRFC3339()}); err != nil {
 		t.Fatalf("review: %v", err)
 	}
 	if err := tx.Commit(); err != nil {
 		t.Fatalf("commit: %v", err)
 	}
 
-	if err := st.reset(nil, []MedicineSeed{{ID: "MED-001", Name: "Paracetamol 500mg", Quantity: 5000}}); err != nil {
-		t.Fatalf("reset 2: %v", err)
+	if err := st.Reset(nil, []MedicineSeed{{ID: "MED-001", Name: "Paracetamol 500mg", Quantity: 5000}}); err != nil {
+		t.Fatalf("Reset 2: %v", err)
 	}
-	if _, found, _ := st.lookupRecord("pat-1"); found {
+	if _, found, _ := st.LookupRecord("pat-1"); found {
 		t.Fatalf("registry survived reset")
 	}
-	if _, found, _ := st.lookupBatchResponse("batch-x"); found {
+	if _, found, _ := st.LookupBatchResponse("batch-x"); found {
 		t.Fatalf("batch response survived reset")
 	}
-	items, err := st.listReviewItems()
+	items, err := st.ListReviewItems()
 	if err != nil || len(items) != 0 {
 		t.Fatalf("review items after reset: %d err=%v; want 0, nil", len(items), err)
 	}
-	got, ok, _ := st.currentStock("MED-001")
+	got, ok, _ := st.CurrentStock("MED-001")
 	if !ok || got != 5000 {
 		t.Fatalf("stock after re-reset = %d ok=%v; want 5000 ok", got, ok)
 	}
 }
 
 func TestNewUUIDv4Format(t *testing.T) {
-	id := newUUIDv4()
+	id := NewUUIDv4()
 	if len(id) != 36 {
 		t.Fatalf("uuid length = %d; want 36", len(id))
 	}
@@ -287,8 +311,8 @@ func TestNewUUIDv4Format(t *testing.T) {
 }
 
 func TestNowRFC3339Format(t *testing.T) {
-	ts := nowRFC3339()
-	if len(ts) != 20 || ts[19] != 'Z' {
-		t.Fatalf("timestamp %q is not RFC3339 Z-terminated", ts)
+	ts := NowRFC3339()
+	if _, err := time.Parse(time.RFC3339, ts); err != nil {
+		t.Fatalf("timestamp %q not RFC3339: %v", ts, err)
 	}
 }

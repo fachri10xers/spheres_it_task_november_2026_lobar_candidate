@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"github.com/joho/godotenv"
 )
@@ -11,13 +12,16 @@ import (
 func main() {
 	_ = godotenv.Load()
 	port := envOr("PORT", "8000")
-	dbPath := envOr("DB_PATH", "sync.db")
+	dbPath := envOr("DB_PATH", "./.data/sync.db")
+	if abs, err := filepath.Abs(dbPath); err == nil {
+		dbPath = abs
+	}
 
-	st, err := openStore(dbPath)
+	st, err := Open(dbPath)
 	if err != nil {
 		log.Fatalf("open store: %v", err)
 	}
-	defer st.close()
+	defer st.Close()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /sync", handleSync(st))

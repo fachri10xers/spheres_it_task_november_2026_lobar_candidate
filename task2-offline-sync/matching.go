@@ -12,9 +12,9 @@ const (
 	reasonSimilarName = "Similar name and birth date"
 )
 
-func findPossibleDuplicatePatient(st *store, patient Patient) (*Patient, string, error) {
+func findPossibleDuplicatePatient(st *Store, patient Patient) (*Patient, string, error) {
 	if !isNoNIK(patient.NIK) {
-		byNIK, err := st.patientsByNIK(patient.NIK)
+		byNIK, err := st.PatientsByNIK(patient.NIK)
 		if err != nil {
 			return nil, "", err
 		}
@@ -22,7 +22,7 @@ func findPossibleDuplicatePatient(st *store, patient Patient) (*Patient, string,
 			return &byNIK[0], reasonExactNIK, nil
 		}
 	}
-	sameBirthDate, err := st.patientsByBirthDate(patient.BirthDate)
+	sameBirthDate, err := st.PatientsByBirthDate(patient.BirthDate)
 	if err != nil {
 		return nil, "", err
 	}

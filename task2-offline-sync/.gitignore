@@ -1,0 +1,6 @@
+.env
+.data/
+sync.db*
+sync-server.exe
+syncserver.exe
+db-snapshot/
