@@ -19,6 +19,7 @@ Be specific: which task, in which part of the project.
 - [x] Built the `/sync` pipeline `sync.go` (2026-11-12, task T3, user-reviewed): malformed-top-level 400 checks, verbatim batch replay by `batch_id`, sequential per-record processing in one transaction each (client_uuid dedup registry → schema_version → type → required fields → reference/medicine resolution → insert → ledger row → negative-stock review item), per-medicine collapsed `stock_updates`, response persisted and replayed byte-identical; validated with a throwaway httptest smoke over payloads 01/02/03/05/06/07 plus a fresh-batch resend (deleted after)
 - [x] Implemented duplicate-patient matching `matching.go` + `matching_test.go` (2026-11-12, task T4, user-reviewed): name normalization (lowercase, punctuation→separator, whitespace collapse), Levenshtein ≤ 2 against equal-birth-date patients in any clinic, exact-NIK rule skipping all-zero NIKs, reason strings "Exact NIK match" / "Similar name and birth date"; updated `DESIGN.md` §2 to the final rule; caught and fixed two of my own test-defect guesses (a stray non-ASCII string, a miscomputed distance boundary) before review
 - [x] Built auxiliary endpoints `handlers.go` + `main.go` wiring (2026-11-12, task T5, user-reviewed): GET `/patients/{id}` & `/stock/{id}` with contract-exact 404 detail strings, GET `/review-queue` (per-type item shapes, `[]` not null), POST `/reset` (mutex-guarded, counts response); `main.go` loads `.env` via godotenv (optional file) with `PORT` default 8000 and `DB_PATH` default `sync.db`, stdlib method-routed mux; verified with a throwaway mux smoke (incl. 405 on GET /sync) and a real `go build` binary boot on :8000 before cleanup
+- [x] Added dev tooling (2026-11-12, task T6, user-reviewed): cross-OS `Makefile` (`OS=Windows_NT` branching for bin/python + per-OS clean recipes; supersedes AGENTS.md's "no Makefile" line at user request), multi-stage `Dockerfile` (`CGO_ENABLED=0`, `COPY . .` so the planned T9 refactor needs no change), `docker-compose.yml` (named volume, `DB_PATH=/data/sync.db`), `.dockerignore`, README "How to run". Debugged two PowerShell 5.1 traps myself: space-separated paths don't bind into positional string arrays (must comma-separate) and `powershell.exe -Command` exits 1 on any recorded error even with `-ErrorAction Ignore` (needs `; exit 0`); verified all make targets locally and the full compose cycle (build → up → /reset → payload 01 → stock 4990 → patient GET → down -v) after starting Docker Desktop
 
 ## 3. Changed / Rejected from AI Output
 
@@ -59,6 +60,12 @@ One entry per occurrence. Use this format:
 - **Decision:** modified
 - **What I did:** wrote one Section 2 line per completed user-reviewed task (T2/T3/T4) as the tasks close, keeping the log contemporaneous
 - **Reason:** AGENTS.md asks for entries whenever a significant task completes; per-task lines reflect what actually happened at the time
+
+### How-to-Run section placed inside README.md
+- **AI suggestion:** append the new "How to Run" deliverable section directly into the task's `README.md` (it is also where the assignment expects the section to live)
+- **Decision:** rejected
+- **What I did:** reverted `README.md` to byte-identical original (verified empty `git diff` against the committed assignment file) and moved the full run instructions into a new `HOW_TO_RUN.md`; also extended `make clean` to remove `syncserver.exe`, the stray binary produced by bare `go build ./...` regression runs
+- **Reason:** `README.md` is the assignment prompt distributed to all candidates — it must stay pristine/byte-identical; submission-specific docs belong in separate files
 
 ## 4. Additional Notes (optional)
 

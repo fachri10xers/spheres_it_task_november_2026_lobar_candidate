@@ -1,0 +1,13 @@
+services:
+  sync:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      PORT: "8000"
+      DB_PATH: /data/sync.db
+    volumes:
+      - sync-data:/data
+
+volumes:
+  sync-data:
